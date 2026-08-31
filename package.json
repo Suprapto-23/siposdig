@@ -15,6 +15,7 @@
     },
     "dependencies": {
         "@lottiefiles/dotlottie-wc": "^0.9.28",
+        "alpinejs": "^3.17.0",
         "apexcharts": "^7.0.0",
         "sweetalert2": "^11.26.25"
     }

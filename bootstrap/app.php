@@ -16,12 +16,3 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();
-    ->withRouting(
-    web: __DIR__.'/../routes/web.php',
-    then: function () {
-        Route::middleware('web')->group(base_path('routes/auth.php'));
-        Route::middleware(['web', 'auth:admin'])->prefix('admin')->group(base_path('routes/admin.php'));
-        Route::middleware(['web', 'auth:kader'])->prefix('kader')->group(base_path('routes/kader.php'));
-        Route::middleware(['web', 'auth:warga'])->prefix('warga')->group(base_path('routes/warga.php'));
-    },
-)

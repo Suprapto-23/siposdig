@@ -6,20 +6,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('edukasi_kesehatan', function (Blueprint $table) {
             $table->id();
+            $table->string('judul');
+            $table->text('konten');
+            $table->string('gambar')->nullable();
+            $table->enum('target_kategori', ['Semua', 'Balita', 'Remaja', 'Lansia'])->default('Semua');
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('edukasi_kesehatan');

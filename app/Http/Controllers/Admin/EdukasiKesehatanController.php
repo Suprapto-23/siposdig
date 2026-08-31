@@ -3,63 +3,56 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\EdukasiKesehatan;
 use Illuminate\Http\Request;
 
-class EdukasiKesehatanController extends Controller
-{
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
+class EdukasiKesehatanController extends Controller {
+    
+    public function index() {
+        $edukasis = EdukasiKesehatan::latest()->paginate(10);
+        return view('admin.edukasi.index', compact('edukasis'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+    public function create() {
+        return view('admin.edukasi.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
+    public function store(Request $request) {
+        $validated = $request->validate([
+            'judul' => 'required|string|max:255',
+            'kategori' => 'required|in:Gizi Balita,Ibu Hamil,Lansia,Penyakit Umum',
+            'konten' => 'required|string',
+            'penulis' => 'nullable|string|max:100',
+        ]);
+
+        EdukasiKesehatan::create($validated);
+
+        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi kesehatan berhasil dipublikasikan.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
+    public function show(EdukasiKesehatan $edukasi) {
+        return view('admin.edukasi.show', compact('edukasi'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
+    public function edit(EdukasiKesehatan $edukasi) {
+        return view('admin.edukasi.edit', compact('edukasi'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
+    public function update(Request $request, EdukasiKesehatan $edukasi) {
+        $validated = $request->validate([
+            'judul' => 'required|string|max:255',
+            'kategori' => 'required|in:Gizi Balita,Ibu Hamil,Lansia,Penyakit Umum',
+            'konten' => 'required|string',
+            'penulis' => 'nullable|string|max:100',
+        ]);
+
+        $edukasi->update($validated);
+
+        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi berhasil diperbarui.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+    public function destroy(EdukasiKesehatan $edukasi) {
+        $edukasi->delete();
+        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi berhasil dihapus.');
     }
 }

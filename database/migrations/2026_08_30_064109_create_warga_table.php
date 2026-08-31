@@ -6,20 +6,25 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('warga', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('unit_posyandu_id')->constrained('unit_posyandu')->cascadeOnDelete();
+            $table->string('nama_lengkap');
+            $table->string('nik', 16)->unique();
+            $table->date('tanggal_lahir');
+            $table->enum('jenis_kelamin', ['L', 'P']);
+            $table->text('alamat');
+            $table->string('no_hp')->nullable();
+            $table->string('password')->nullable();
+            $table->enum('status', ['pending', 'aktif', 'ditolak', 'nonaktif'])->default('pending');
+            $table->string('catatan_admin')->nullable();
+            $table->boolean('wajib_ganti_password')->default(true);
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('warga');
