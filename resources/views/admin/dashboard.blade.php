@@ -37,13 +37,14 @@
                 Akses kontrol penuh operasional SIPOSDIG. Validasi data warga, setujui pendaftaran kader lapangan, dan pantau jadwal posyandu secara *real-time* dari satu layar.
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-4">
-                <button class="rounded-2xl bg-blue-600 px-6 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-all flex items-center gap-2">
+                <a href="{{ route('admin.kader.create') }}">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Registrasi Kader Baru
-                </button>
-                <button class="rounded-2xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                </a>
+                                <button disabled class="rounded-2xl bg-slate-50 border border-slate-200 px-6 py-3.5 text-xs font-bold text-slate-400 flex items-center gap-2 cursor-not-allowed">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     Unduh Rekap Bulanan
+                    <span class="ml-1 px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 text-[9px]">Segera</span>
                 </button>
             </div>
         </div>
@@ -60,10 +61,9 @@
 </div>
 
 
-    <!-- ================= 2. METRIK FUNGSIONAL (KONSISTEN BIRU) ================= -->
+        <!-- ================= 2. METRIK FUNGSIONAL (DATA ASLI) ================= -->
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        
-        <!-- Metrik 1 -->
+
         <div class="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between group hover:border-blue-200 transition-colors">
             <div class="flex items-center justify-between mb-4">
                 <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Unit Posyandu</span>
@@ -72,12 +72,11 @@
                 </div>
             </div>
             <div>
-                <p class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">8</p>
-                <p class="text-[11px] font-bold text-slate-500 mt-1 uppercase">Wilayah Operasional</p>
+                <p class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">{{ $totalUnit }}</p>
+                <p class="text-[11px] font-bold text-slate-500 mt-1 uppercase">Wilayah Operasional Aktif</p>
             </div>
         </div>
 
-        <!-- Metrik 2 -->
         <div class="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between group hover:border-blue-200 transition-colors">
             <div class="flex items-center justify-between mb-4">
                 <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Total Kader</span>
@@ -86,10 +85,44 @@
                 </div>
             </div>
             <div>
-                <p class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">32</p>
-                <p class="text-[11px] font-bold text-slate-500 mt-1 uppercase">Kader Bertugas</p>
+                <p class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">{{ $totalKader }}</p>
+                <p class="text-[11px] font-bold text-slate-500 mt-1 uppercase">Kader Lapangan Aktif</p>
             </div>
         </div>
+
+        <div class="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between group hover:border-blue-200 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Warga Binaan</span>
+                <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </div>
+            </div>
+            <div>
+                <p class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">{{ $totalWarga }}</p>
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                    <span class="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100/50">{{ $totalBalita }} Balita</span>
+                    <span class="px-2 py-1 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-100/50">{{ $totalRemaja }} Remaja</span>
+                    <span class="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200/50">{{ $totalLansia }} Lansia</span>
+                </div>
+            </div>
+        </div>
+
+        <a href="{{ route('admin.verifikasi') }}" class="bg-blue-600 rounded-3xl p-6 shadow-lg shadow-blue-600/20 text-white flex flex-col justify-between relative overflow-hidden hover:bg-blue-700 transition-colors">
+            <div class="absolute -right-6 -top-6 opacity-20">
+                <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            </div>
+            <div class="flex items-center justify-between mb-4 relative z-10">
+                <span class="text-[11px] font-bold text-blue-200 uppercase tracking-widest">Perlu Tindakan</span>
+                @if($antreanVerifikasi > 0)
+                    <span class="flex h-3 w-3 rounded-full bg-white animate-ping"></span>
+                @endif
+            </div>
+            <div class="relative z-10">
+                <p class="font-display text-4xl font-extrabold tracking-tight">{{ $antreanVerifikasi }}</p>
+                <p class="text-[11px] font-bold text-blue-100 mt-1 uppercase">Antrean NIK Warga Baru</p>
+            </div>
+        </a>
+    </div>
 
         <!-- Metrik 3 -->
         <div class="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between group hover:border-blue-200 transition-colors">

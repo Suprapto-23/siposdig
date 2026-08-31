@@ -2,29 +2,22 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 
-class Kader extends Model
+class Kader extends Authenticatable
 {
-    // 1. Mencegah error "kaders table not found"
+    use Notifiable;
+
     protected $table = 'kader';
 
-    // 2. Kolom yang boleh diisi (mass-assignable)
     protected $fillable = [
-        'unit_posyandu_id',
-        'nama_lengkap',
-        'email',
-        'password',
-        'wajib_ganti_password',
-        'status',
+        'unit_posyandu_id', 'nama_lengkap', 'email', 'password',
+        'wajib_ganti_password', 'status',
     ];
 
-    // 3. Sembunyikan password saat data dipanggil
-    protected $hidden = [
-        'password',
-    ];
+    protected $hidden = ['password', 'remember_token'];
 
-    // 4. Relasi: Satu kader dimiliki oleh satu Unit Posyandu
     public function unitPosyandu()
     {
         return $this->belongsTo(UnitPosyandu::class, 'unit_posyandu_id');
