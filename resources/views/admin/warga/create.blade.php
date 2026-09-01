@@ -50,7 +50,7 @@
                     <label class="block text-sm font-bold text-slate-700 mb-2">Penempatan Unit Posyandu <span class="text-rose-500">*</span></label>
                     <select name="unit_posyandu_id" required class="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-slate-700">
                         <option value="">-- Pilih Posyandu --</option>
-                        @foreach($unitPosyandus as $unit)
+                        @foreach($unitPosyandu as $unit)
                             <option value="{{ $unit->id }}">{{ $unit->nama }} - {{ $unit->wilayah }}</option>
                         @endforeach
                     </select>

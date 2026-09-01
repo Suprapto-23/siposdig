@@ -2,59 +2,45 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Carbon\Carbon;
 
 class Warga extends Authenticatable
 {
-    use Notifiable;
+    use HasFactory;
 
+    // 1. Kunci nama tabel agar tidak dibaca 'wargas'
     protected $table = 'warga';
 
+    // 2. Izinkan kolom-kolom ini diisi melalui form (Mass Assignment)
     protected $fillable = [
-        'unit_posyandu_id',
+        'nama_lengkap',
         'nik',
-        'nama',
+        'unit_posyandu_id',
         'tanggal_lahir',
         'jenis_kelamin',
+        'kategori',
         'alamat',
         'no_hp',
-        'kategori',
-        'status', // pending, aktif, ditolak, nonaktif
         'password',
         'wajib_ganti_password',
-        'catatan_admin'
+        'status',
     ];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    protected $casts = [
-        'tanggal_lahir' => 'date',
-        'password' => 'hashed',
-        'wajib_ganti_password' => 'boolean',
-    ];
-
-    public function unit(): BelongsTo
+    /**
+     * 3. RELASI ELOQUENT (Penyebab error saat ini)
+     * Pastikan penamaan method menggunakan camelCase (unitPosyandu)
+     */
+    public function unitPosyandu()
     {
-        return $this->belongsTo(UnitPosyandu::class, 'unit_posyandu_id');
+        return $this->belongsTo(UnitPosyandu::class, 'unit_posyandu_id', 'id');
     }
 
-    public function pengukuran(): HasMany
+    /**
+     * Relasi ke Pengukuran Fisik (Mencegah error di kemudian hari)
+     */
+    public function pengukuranFisik()
     {
-        return $this->hasMany(PengukuranFisik::class, 'warga_id');
-    }
-
-    // Accessor otomatis untuk menghitung usia detail
-    public function getUsiaDetailAttribute(): string
-    {
-        if (!$this->tanggal_lahir) return '-';
-        $diff = $this->tanggal_lahir->diff(Carbon::now());
-        return "{$diff->y} thn, {$diff->m} bln";
+        return $this->hasMany(PengukuranFisik::class, 'warga_id', 'id');
     }
 }

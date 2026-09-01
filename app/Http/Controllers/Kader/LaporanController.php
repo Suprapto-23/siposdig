@@ -7,6 +7,7 @@ use App\Models\Warga;
 use App\Models\Absensi;
 use App\Models\PengukuranFisik;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf; // Import DOMPDF
 
 class LaporanController extends Controller
 {
@@ -18,70 +19,39 @@ class LaporanController extends Controller
         $tahun = $request->input('tahun', now()->format('Y'));
         $kategori = $request->input('kategori', 'Semua');
 
-        // 1. Statistik Demografi Warga Aktif
+        // 1. Statistik Warga Aktif
         $totalWarga  = Warga::where('unit_posyandu_id', $kaderUnitId)->where('status', 'aktif')->count();
         $wargaBalita = Warga::where('unit_posyandu_id', $kaderUnitId)->where('status', 'aktif')->where('kategori', 'Balita')->count();
         $wargaRemaja = Warga::where('unit_posyandu_id', $kaderUnitId)->where('status', 'aktif')->where('kategori', 'Remaja')->count();
         $wargaLansia = Warga::where('unit_posyandu_id', $kaderUnitId)->where('status', 'aktif')->where('kategori', 'Lansia')->count();
 
-        // 2. Rekapitulasi Absensi Bulanan
-        $rekapAbsensi = Absensi::where('unit_posyandu_id', $kaderUnitId)
-            ->whereMonth('tanggal', $bulan)
-            ->whereYear('tanggal', $tahun)
-            ->selectRaw('status_hadir, COUNT(*) as total')
-            ->groupBy('status_hadir')
-            ->pluck('total', 'status_hadir');
-
-        $totalHadir = $rekapAbsensi['hadir'] ?? 0;
-        $totalIzin  = $rekapAbsensi['izin'] ?? 0;
-        $totalSakit = $rekapAbsensi['sakit'] ?? 0;
-
-        // 3. Tarik data pengukuran fisik
+        // 2. Tarik Data Pengukuran Berdasarkan Filter
         $queryPengukuran = PengukuranFisik::with('warga')
             ->whereHas('warga', function($q) use ($kaderUnitId, $kategori) {
                 $q->where('unit_posyandu_id', $kaderUnitId);
-                if ($kategori !== 'Semua') {
-                    $q->where('kategori', $kategori);
-                }
+                if ($kategori !== 'Semua') $q->where('kategori', $kategori);
             })
             ->whereMonth('tanggal_ukur', $bulan)
             ->whereYear('tanggal_ukur', $tahun);
 
         $dataLaporan = (clone $queryPengukuran)->orderBy('tanggal_ukur', 'desc')->get();
-        $totalPengukuran = (clone $queryPengukuran)->count();
+        
+        // Proteksi Bug: Mencegah nilai Null saat data kosong
+        $avgBb = $dataLaporan->avg('berat_badan');
+        $avgTb = $dataLaporan->avg('tinggi_badan');
 
-        // 4. Indikator Status Stunting Balita Bulanan
-        $dataStunting = PengukuranFisik::whereHas('warga', function($q) use ($kaderUnitId) {
-                $q->where('unit_posyandu_id', $kaderUnitId)->where('kategori', 'Balita');
-            })
-            ->whereMonth('tanggal_ukur', $bulan)
-            ->whereYear('tanggal_ukur', $tahun)
-            ->selectRaw('status_stunting, COUNT(*) as total')
-            ->groupBy('status_stunting')
-            ->pluck('total', 'status_stunting');
-
-        // 5. Summary Cards
         $summary = [
             'total_diukur' => $dataLaporan->count(),
-            'rata_berat'   => $dataLaporan->avg('berat_badan') ? round($dataLaporan->avg('berat_badan'), 2) : 0,
-            'rata_tinggi'  => $dataLaporan->avg('tinggi_badan') ? round($dataLaporan->avg('tinggi_badan'), 2) : 0,
+            'rata_berat'   => $avgBb ? round($avgBb, 2) : 0,
+            'rata_tinggi'  => $avgTb ? round($avgTb, 2) : 0,
         ];
 
         return view('kader.laporan.index', compact(
             'dataLaporan', 'bulan', 'tahun', 'kategori', 'summary',
-            'totalWarga', 'wargaBalita', 'wargaRemaja', 'wargaLansia',
-            'totalHadir', 'totalIzin', 'totalSakit', 'totalPengukuran',
-            'dataStunting'
+            'totalWarga', 'wargaBalita', 'wargaRemaja', 'wargaLansia'
         ));
     }
 
-    // Fungsi Pengaman agar tidak error jika ada rute show terpanggil
-    public function show($id)
-    {
-        return redirect()->route('kader.laporan.index');
-    }
-
-    // Fungsi Cetak Laporan
     public function export(Request $request)
     {
         $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
@@ -89,18 +59,23 @@ class LaporanController extends Controller
         $tahun = $request->input('tahun', now()->format('Y'));
         $kategori = $request->input('kategori', 'Semua');
 
-        $query = PengukuranFisik::with(['warga', 'kader'])
+        $dataLaporan = PengukuranFisik::with(['warga', 'kader'])
             ->whereHas('warga', function($q) use ($kaderUnitId, $kategori) {
                 $q->where('unit_posyandu_id', $kaderUnitId);
-                if ($kategori !== 'Semua') {
-                    $q->where('kategori', $kategori);
-                }
+                if ($kategori !== 'Semua') $q->where('kategori', $kategori);
             })
             ->whereMonth('tanggal_ukur', $bulan)
-            ->whereYear('tanggal_ukur', $tahun);
+            ->whereYear('tanggal_ukur', $tahun)
+            ->orderBy('tanggal_ukur', 'asc')
+            ->get();
 
-        $dataLaporan = $query->orderBy('tanggal_ukur', 'asc')->get();
+        // Generate PDF menggunakan DOMPDF (Kertas Landscape)
+        $pdf = Pdf::loadView('kader.laporan.cetak', compact('dataLaporan', 'bulan', 'tahun', 'kategori'))
+                  ->setPaper('a4', 'landscape');
+        
+        $namaFile = "Laporan_Posyandu_{$kategori}_{$bulan}_{$tahun}.pdf";
 
-        return view('kader.laporan.cetak', compact('dataLaporan', 'bulan', 'tahun', 'kategori'));
+        // Mengembalikan response DOWNLOAD langsung, tanpa pindah halaman
+        return $pdf->download($namaFile);
     }
 }

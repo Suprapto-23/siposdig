@@ -80,16 +80,6 @@
                 Laporan Unit
             </div>
         </a>
-
-        <a href="{{ route('kader.saran.index') }}" 
-           class="flex items-center rounded-2xl px-3.5 py-3 transition-all duration-200 {{ request()->routeIs('kader.saran.*') ? 'bg-blue-50 text-blue-700 font-bold border border-blue-100/50' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600 font-medium' }}"
-           :class="sidebarCollapsed ? 'justify-center' : 'justify-start'" title="Kotak Saran">
-            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-            <div class="transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden" 
-                 :class="sidebarCollapsed ? 'w-0 opacity-0 ml-0' : 'w-[160px] opacity-100 ml-4'">
-                Saran & Masukan
-            </div>
-        </a>
     </nav>
 
     <!-- Logout -->
