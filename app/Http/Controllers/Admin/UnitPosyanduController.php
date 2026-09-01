@@ -8,53 +8,49 @@ use Illuminate\Http\Request;
 
 class UnitPosyanduController extends Controller
 {
-    public function index() {
-        $unitPosyandus = UnitPosyandu::latest()->paginate(10);
-        return view('admin.unit-posyandu.index', compact('unitPosyandus'));
+    public function index(Request $request)
+    {
+        // Hitung relasi sekalian untuk ditampilkan di tabel tanpa query berulang (N+1 safe)
+        $units = UnitPosyandu::withCount(['kader', 'warga'])->latest()->paginate(10);
+        return view('admin.unit-posyandu.index', compact('units'));
     }
 
-    public function create() {
-        return view('admin.unit-posyandu.create');
-    }
-
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         $validated = $request->validate([
-            'nama_posyandu' => 'required|string|max:255',
-            'rw' => 'required|string|max:10',
-            'rt' => 'nullable|string|max:10',
+            'nama' => 'required|string|max:255',
             'alamat' => 'required|string',
-            'keterangan' => 'nullable|string',
+            'desa_kelurahan' => 'required|string|max:100',
+            'kecamatan' => 'required|string|max:100',
+            'penanggung_jawab' => 'required|string|max:255',
         ]);
 
         UnitPosyandu::create($validated);
-
-        return redirect()->route('admin.unit-posyandu.index')->with('success', 'Unit Posyandu berhasil ditambahkan.');
+        return redirect()->route('admin.unit.index')->with('success', 'Unit Posyandu berhasil ditambahkan.');
     }
 
-    public function show(UnitPosyandu $unitPosyandu) {
-        return view('admin.unit-posyandu.show', compact('unitPosyandu'));
-    }
-
-    public function edit(UnitPosyandu $unitPosyandu) {
-        return view('admin.unit-posyandu.edit', compact('unitPosyandu'));
-    }
-
-    public function update(Request $request, UnitPosyandu $unitPosyandu) {
+    public function update(Request $request, UnitPosyandu $unit)
+    {
         $validated = $request->validate([
-            'nama_posyandu' => 'required|string|max:255',
-            'rw' => 'required|string|max:10',
-            'rt' => 'nullable|string|max:10',
+            'nama' => 'required|string|max:255',
             'alamat' => 'required|string',
-            'keterangan' => 'nullable|string',
+            'desa_kelurahan' => 'required|string|max:100',
+            'kecamatan' => 'required|string|max:100',
+            'penanggung_jawab' => 'required|string|max:255',
         ]);
 
-        $unitPosyandu->update($validated);
-
-        return redirect()->route('admin.unit-posyandu.index')->with('success', 'Unit Posyandu berhasil diperbarui.');
+        $unit->update($validated);
+        return redirect()->route('admin.unit.index')->with('success', 'Unit Posyandu berhasil diperbarui.');
     }
 
-    public function destroy(UnitPosyandu $unitPosyandu) {
-        $unitPosyandu->delete();
-        return redirect()->route('admin.unit-posyandu.index')->with('success', 'Unit Posyandu berhasil dihapus.');
+    public function destroy(UnitPosyandu $unit)
+    {
+        // PROTEKSI: Cegah hapus jika ada kader/warga (Mencegah error fk constraint)
+        if ($unit->kader()->exists() || $unit->warga()->exists()) {
+            return back()->with('error', 'Gagal menghapus. Pindahkan terlebih dahulu Kader dan Warga dari Unit ini.');
+        }
+
+        $unit->delete();
+        return back()->with('success', 'Unit Posyandu berhasil dihapus.');
     }
 }

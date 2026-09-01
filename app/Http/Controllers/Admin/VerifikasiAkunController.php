@@ -3,91 +3,67 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Warga;
 use Illuminate\Http\Request;
-use App\Models\Warga; // Pastikan model Warga sudah ada
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class VerifikasiAkunController extends Controller
 {
-    /**
-     * Menampilkan daftar antrean verifikasi warga.
-     */
     public function index(Request $request)
     {
-        // Menangkap filter dari request (default: pending)
-        $status = $request->query('status', 'pending');
-        $search = $request->query('search');
-
-        // Query dasar
-        $query = Warga::with('unitPosyandu')->where('status', $status);
-
-        // Filter pencarian berdasarkan NIK atau Nama
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('nama_lengkap', 'like', "%{$search}%")
-                  ->orWhere('nik', 'like', "%{$search}%");
-            });
-        }
-
-        // Ambil data dengan pagination (10 per halaman)
-        $antreanWarga = $query->latest()->paginate(10)->withQueryString();
-
-        return view('admin.verifikasi.index', compact('antreanWarga', 'status', 'search'));
+        $antrean = Warga::with('unit')
+            ->where('status', 'pending')
+            ->latest()
+            ->paginate(10);
+            
+        return view('admin.verifikasi.index', compact('antrean'));
     }
 
-    /**
-     * Menyetujui pendaftaran dan meng-generate password.
-     */
-    public function approve(Request $request, $id)
+    public function setujui(Request $request, Warga $warga)
     {
-        $warga = Warga::findOrFail($id);
-
         if ($warga->status !== 'pending') {
-            return redirect()->back()->with('error', 'Pendaftaran ini sudah diverifikasi sebelumnya.');
+            return back()->with('error', 'Status warga sudah diproses sebelumnya.');
         }
 
-        // Generate password acak (8 karakter) sesuai PRD
-        $plainPassword = Str::random(8);
+        $rawPassword = Str::random(8); // Sesuai PRD
+        
+        DB::transaction(function () use ($warga, $rawPassword) {
+            $warga->update([
+                'status' => 'aktif',
+                'password' => Hash::make($rawPassword),
+                'wajib_ganti_password' => true,
+                'catatan_admin' => null // bersihkan catatan jika pernah ditolak sebelumnya
+            ]);
+            
+            // Rekam aktivitas
+            activity()->performedOn($warga)->causedBy(auth('admin')->user())->log('menyetujui pendaftaran warga');
+        });
 
-        // Update status dan simpan password
-        $warga->update([
-            'status' => 'aktif',
-            'password' => Hash::make($plainPassword),
-            'wajib_ganti_password' => true, // Memaksa warga ganti password saat login pertama kali
-            'catatan_admin' => null
-        ]);
-
-        // Kirim plain password ke session secara flash (hanya bisa dilihat sekali)
-        return redirect()->back()
-            ->with('success', "Akun warga {$warga->nama_lengkap} berhasil disetujui.")
-            ->with('generated_password', $plainPassword)
-            ->with('warga_id', $warga->id);
+        // Lempar ke UI untuk dicetak "Kartu Akun" / di-copy Admin
+        return back()
+            ->with('success', 'Pendaftaran warga disetujui.')
+            ->with('kredensial_warga', [
+                'nik' => $warga->nik,
+                'password' => $rawPassword,
+                'nama' => $warga->nama
+            ]);
     }
 
-    /**
-     * Menolak pendaftaran dengan catatan alasan.
-     */
-    public function reject(Request $request, $id)
+    public function tolak(Request $request, Warga $warga)
     {
-        $request->validate([
-            'catatan_admin' => 'required|string|max:255'
-        ], [
-            'catatan_admin.required' => 'Alasan penolakan wajib diisi.'
+        $validated = $request->validate([
+            'catatan_admin' => 'required|string|max:500'
         ]);
 
-        $warga = Warga::findOrFail($id);
-
-        if ($warga->status !== 'pending') {
-            return redirect()->back()->with('error', 'Pendaftaran ini sudah diverifikasi sebelumnya.');
-        }
-
-        // Update status menjadi ditolak
         $warga->update([
             'status' => 'ditolak',
-            'catatan_admin' => $request->catatan_admin
+            'catatan_admin' => $validated['catatan_admin']
         ]);
 
-        return redirect()->back()->with('success', 'Pendaftaran berhasil ditolak.');
+        activity()->performedOn($warga)->causedBy(auth('admin')->user())->log('menolak pendaftaran warga');
+
+        return back()->with('success', 'Pendaftaran warga telah ditolak.');
     }
 }

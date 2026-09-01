@@ -3,125 +3,93 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Kader;
 use App\Models\UnitPosyandu;
-use Illuminate\Support\Str;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class KaderController extends Controller
 {
-    /**
-     * Tampilkan daftar kader dengan fitur pencarian.
-     */
     public function index(Request $request)
     {
-        $search = $request->query('search');
-
-        // Eager loading relasi unitPosyandu untuk menghindari N+1 Query Problem
-        $query = Kader::with('unitPosyandu');
-
-        if ($search) {
-            $query->where('nama_lengkap', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-        }
-
-        $kaders = $query->latest()->paginate(10)->withQueryString();
-
-        return view('admin.kader.index', compact('kaders', 'search'));
+        $search = $request->input('search');
+        
+        $kaders = Kader::with('unit')->when($search, function($q) use ($search) {
+            $q->where('nama', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%");
+        })->latest()->paginate(10);
+        
+        return view('admin.kader.index', compact('kaders'));
     }
 
-    /**
-     * Tampilkan form tambah kader baru.
-     */
     public function create()
     {
-        // Ambil semua unit posyandu untuk mengisi pilihan Dropdown
-        $unitPosyandus = UnitPosyandu::orderBy('nama', 'asc')->get();
-        return view('admin.kader.create', compact('unitPosyandus'));
+        $units = UnitPosyandu::orderBy('nama', 'asc')->get();
+        return view('admin.kader.create', compact('units'));
     }
 
-    /**
-     * Simpan data kader baru ke database & Generate Password.
-     */
     public function store(Request $request)
     {
-        $request->validate([
-            'nama_lengkap' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:kader,email',
+        $validated = $request->validate([
+            'nama' => 'required|string|max:255',
+            'email' => 'required|email|unique:kader,email',
             'unit_posyandu_id' => 'required|exists:unit_posyandu,id',
-        ], [
-            'email.unique' => 'Email ini sudah terdaftar. Gunakan email lain.',
-            'unit_posyandu_id.exists' => 'Unit Posyandu tidak valid.'
         ]);
 
-        // Generate password acak 8 karakter
-        $plainPassword = Str::random(8);
-
-        // Buat akun kader
-        $kader = Kader::create([
-            'nama_lengkap' => $request->nama_lengkap,
-            'email' => $request->email,
-            'unit_posyandu_id' => $request->unit_posyandu_id,
-            'password' => Hash::make($plainPassword),
-            'wajib_ganti_password' => true,
-            'status' => 'aktif',
-        ]);
-
-        // Kembalikan ke halaman index dengan flash message sukses & password sementara
-        return redirect()->route('admin.kader.index')
-            ->with('success', "Akun Kader {$kader->nama_lengkap} berhasil dibuat!")
-            ->with('generated_password', $plainPassword);
-    }
-
-    /**
-     * Tampilkan form edit data kader.
-     */
-    public function edit(string $id)
-    {
-        $kader = Kader::findOrFail($id);
-        $unitPosyandus = UnitPosyandu::orderBy('nama', 'asc')->get();
+        // Generate password otomatis
+        $rawPassword = Str::random(8);
         
-        return view('admin.kader.edit', compact('kader', 'unitPosyandus'));
+        $kader = new Kader($validated);
+        $kader->password = Hash::make($rawPassword);
+        $kader->wajib_ganti_password = true; // Flag setup awal
+        $kader->status = 'aktif';
+        $kader->save();
+
+        // Lempar raw password ke session flash untuk ditangkap di index
+        return redirect()->route('admin.kader.index')
+            ->with('success', 'Kader berhasil ditambahkan.')
+            ->with('kredensial_baru', [
+                'email' => $kader->email,
+                'password' => $rawPassword
+            ]);
     }
 
-    /**
-     * Update data kader (termasuk ganti status Aktif/Nonaktif).
-     */
-    public function update(Request $request, string $id)
+    public function edit(Kader $kader)
     {
-        $kader = Kader::findOrFail($id);
+        $units = UnitPosyandu::orderBy('nama', 'asc')->get();
+        return view('admin.kader.edit', compact('kader', 'units'));
+    }
 
-        $request->validate([
-            'nama_lengkap' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:kader,email,' . $kader->id,
+    public function update(Request $request, Kader $kader)
+    {
+        $validated = $request->validate([
+            'nama' => 'required|string|max:255',
+            'email' => 'required|email|unique:kader,email,' . $kader->id,
             'unit_posyandu_id' => 'required|exists:unit_posyandu,id',
             'status' => 'required|in:aktif,nonaktif',
-        ], [
-            'email.unique' => 'Email ini sudah digunakan oleh kader lain.'
         ]);
 
-        $kader->update([
-            'nama_lengkap' => $request->nama_lengkap,
-            'email' => $request->email,
-            'unit_posyandu_id' => $request->unit_posyandu_id,
-            'status' => $request->status,
-        ]);
+        $kader->update($validated);
 
-        return redirect()->route('admin.kader.index')
-            ->with('success', 'Data profil kader berhasil diperbarui.');
+        return redirect()->route('admin.kader.index')->with('success', 'Data kader berhasil diperbarui.');
     }
 
-    /**
-     * Hapus data kader (Opsional jika ingin hapus permanen).
-     * Namun disarankan cukup ubah status ke nonaktif di method update.
-     */
-    public function destroy(string $id)
+    // Inisiatif: Tambahkan fungsi reset manual agar admin bisa regenerate password jika lupa
+    public function resetPassword(Kader $kader)
     {
-        $kader = Kader::findOrFail($id);
-        $kader->delete();
+        $rawPassword = Str::random(8);
+        
+        $kader->update([
+            'password' => Hash::make($rawPassword),
+            'wajib_ganti_password' => true
+        ]);
 
         return redirect()->route('admin.kader.index')
-            ->with('success', 'Akun kader berhasil dihapus permanen.');
+            ->with('success', 'Password kader berhasil direset.')
+            ->with('kredensial_baru', [
+                'email' => $kader->email,
+                'password' => $rawPassword
+            ]);
     }
 }

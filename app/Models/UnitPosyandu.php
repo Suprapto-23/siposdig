@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class UnitPosyandu extends Model
 {
@@ -10,14 +11,19 @@ class UnitPosyandu extends Model
 
     protected $fillable = [
         'nama',
-        'wilayah',
         'alamat',
+        'desa_kelurahan',
+        'kecamatan',
         'penanggung_jawab',
     ];
 
-    // Relasi: Satu Unit Posyandu memiliki banyak Kader
-    public function kaders()
+    public function kader(): HasMany
     {
         return $this->hasMany(Kader::class, 'unit_posyandu_id');
+    }
+
+    public function warga(): HasMany
+    {
+        return $this->hasMany(Warga::class, 'unit_posyandu_id');
     }
 }

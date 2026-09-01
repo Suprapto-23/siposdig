@@ -5,54 +5,71 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\EdukasiKesehatan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
-class EdukasiKesehatanController extends Controller {
-    
-    public function index() {
-        $edukasis = EdukasiKesehatan::latest()->paginate(10);
-        return view('admin.edukasi.index', compact('edukasis'));
+class EdukasiKesehatanController extends Controller
+{
+    public function index()
+    {
+        $edukasi = EdukasiKesehatan::with('pembuat')->latest()->paginate(10);
+        return view('admin.edukasi.index', compact('edukasi'));
     }
 
-    public function create() {
-        return view('admin.edukasi.create');
-    }
-
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         $validated = $request->validate([
             'judul' => 'required|string|max:255',
-            'kategori' => 'required|in:Gizi Balita,Ibu Hamil,Lansia,Penyakit Umum',
             'konten' => 'required|string',
-            'penulis' => 'nullable|string|max:100',
+            'target_kategori' => 'required|in:Balita,Remaja,Lansia,Semua',
+            'status' => 'required|in:draft,publish',
+            'gambar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048', // Batas 2MB
         ]);
+
+        $validated['slug'] = Str::slug($validated['judul']) . '-' . uniqid();
+        $validated['admin_id'] = auth('admin')->id();
+        
+        if ($request->hasFile('gambar')) {
+            $validated['gambar'] = $request->file('gambar')->store('edukasi', 'public');
+        }
 
         EdukasiKesehatan::create($validated);
-
-        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi kesehatan berhasil dipublikasikan.');
+        return redirect()->route('admin.edukasi.index')->with('success', 'Materi edukasi berhasil diterbitkan.');
     }
 
-    public function show(EdukasiKesehatan $edukasi) {
-        return view('admin.edukasi.show', compact('edukasi'));
-    }
-
-    public function edit(EdukasiKesehatan $edukasi) {
-        return view('admin.edukasi.edit', compact('edukasi'));
-    }
-
-    public function update(Request $request, EdukasiKesehatan $edukasi) {
+    public function update(Request $request, EdukasiKesehatan $edukasi)
+    {
         $validated = $request->validate([
             'judul' => 'required|string|max:255',
-            'kategori' => 'required|in:Gizi Balita,Ibu Hamil,Lansia,Penyakit Umum',
             'konten' => 'required|string',
-            'penulis' => 'nullable|string|max:100',
+            'target_kategori' => 'required|in:Balita,Remaja,Lansia,Semua',
+            'status' => 'required|in:draft,publish',
+            'gambar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        $edukasi->update($validated);
+        if ($request->hasFile('gambar')) {
+            // Hapus gambar lama agar storage tidak bengkak
+            if ($edukasi->gambar) {
+                Storage::disk('public')->delete($edukasi->gambar);
+            }
+            $validated['gambar'] = $request->file('gambar')->store('edukasi', 'public');
+        }
 
-        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi berhasil diperbarui.');
+        // Update slug hanya jika judul berubah
+        if ($request->judul !== $edukasi->judul) {
+            $validated['slug'] = Str::slug($validated['judul']) . '-' . uniqid();
+        }
+
+        $edukasi->update($validated);
+        return redirect()->route('admin.edukasi.index')->with('success', 'Materi edukasi diperbarui.');
     }
 
-    public function destroy(EdukasiKesehatan $edukasi) {
+    public function destroy(EdukasiKesehatan $edukasi)
+    {
+        if ($edukasi->gambar) {
+            Storage::disk('public')->delete($edukasi->gambar);
+        }
         $edukasi->delete();
-        return redirect()->route('admin.edukasi.index')->with('success', 'Artikel edukasi berhasil dihapus.');
+        return back()->with('success', 'Materi edukasi berhasil dihapus.');
     }
 }

@@ -3,63 +3,42 @@
 namespace App\Http\Controllers\Kader;
 
 use App\Http\Controllers\Controller;
+use App\Models\SaranKader;
+use App\Models\Warga;
 use Illuminate\Http\Request;
 
 class SaranController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $kaderId = auth('kader')->id();
+        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+
+        $validated = $request->validate([
+            'warga_id' => 'required|exists:warga,id',
+            'pengukuran_fisik_id' => 'nullable|exists:pengukuran_fisik,id',
+            'pesan_saran' => 'required|string|max:1000',
+        ]);
+
+        // Proteksi: Pastikan warga adalah warga di unit yang sama
+        Warga::where('unit_posyandu_id', $kaderUnitId)->findOrFail($validated['warga_id']);
+
+        $validated['kader_id'] = $kaderId;
+        $validated['tanggal'] = now()->format('Y-m-d');
+
+        SaranKader::create($validated);
+
+        return back()->with('success', 'Catatan/Saran berhasil ditambahkan ke riwayat Warga.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function destroy($id)
     {
-        //
-    }
+        $kaderId = auth('kader')->id();
+        
+        // Kader hanya bisa menghapus saran yang ditulis olehnya sendiri
+        $saran = SaranKader::where('kader_id', $kaderId)->findOrFail($id);
+        $saran->delete();
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        return back()->with('success', 'Saran berhasil ditarik/dihapus.');
     }
 }

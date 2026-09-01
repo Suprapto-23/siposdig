@@ -2,21 +2,25 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class EdukasiKesehatan extends Model 
+class EdukasiKesehatan extends Model
 {
-    use HasFactory;
-
-    // Mendefinisikan nama tabel secara eksplisit sesuai migration
     protected $table = 'edukasi_kesehatan';
 
-    // Menyesuaikan kolom dengan migration terbaru
     protected $fillable = [
+        'admin_id',
         'judul',
+        'slug',
         'konten',
         'gambar',
-        'target_kategori',
+        'target_kategori', // Balita, Remaja, Lansia, Semua
+        'status', // draft, publish
     ];
+
+    public function pembuat(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'admin_id');
+    }
 }

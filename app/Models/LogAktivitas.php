@@ -2,19 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\Models\Activity as SpatieActivity;
 
-class LogAktivitas extends Model 
+class LogAktivitas extends SpatieActivity
 {
-    use HasFactory;
-
+    // Override nama tabel jika berbeda dari bawaan spatie
     protected $table = 'log_aktivitas';
 
-    protected $fillable = [
-        'pelaku',
-        'role',
-        'aksi',
-        'deskripsi',
-    ];
+    // Model ini secara otomatis diurus oleh Spatie.
+    // Jika Anda ingin menambahkan accessor/mutator spesifik, bisa di sini.
 }
