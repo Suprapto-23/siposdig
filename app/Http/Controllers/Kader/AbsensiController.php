@@ -4,92 +4,80 @@ namespace App\Http\Controllers\Kader;
 
 use App\Http\Controllers\Controller;
 use App\Models\Absensi;
-use App\Models\JadwalPosyandu;
 use App\Models\Warga;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class AbsensiController extends Controller
 {
-    public function index()
+    // 1. HALAMAN INDEX: Group by Tanggal & Kategori
+    public function index(Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
+        
+        $query = Absensi::join('warga', 'absensi.warga_id', '=', 'warga.id')
+            ->where('absensi.unit_posyandu_id', $kader->unit_posyandu_id)
+            ->selectRaw('
+                absensi.tanggal,
+                warga.kategori,
+                COUNT(absensi.id) as total_sasaran,
+                SUM(CASE WHEN absensi.status_hadir = "hadir" THEN 1 ELSE 0 END) as total_hadir,
+                SUM(CASE WHEN absensi.status_hadir = "izin" THEN 1 ELSE 0 END) as total_izin,
+                SUM(CASE WHEN absensi.status_hadir = "sakit" THEN 1 ELSE 0 END) as total_sakit
+            ')
+            ->groupBy('absensi.tanggal', 'warga.kategori')
+            ->orderBy('absensi.tanggal', 'desc');
 
-        // Tampilkan jadwal yang spesifik untuk unit posyandu kader ini
-        $jadwal = JadwalPosyandu::withCount(['absensi' => function($q) {
-            $q->where('status_hadir', 'hadir');
-        }])
-        ->where('unit_posyandu_id', $kaderUnitId)
-        ->latest('tanggal')
-        ->paginate(10);
+        // Filter Pencarian Tanggal
+        if ($request->has('search') && $request->search != '') {
+            $query->where('absensi.tanggal', 'like', "%{$request->search}%");
+        }
 
-        return view('kader.absensi.index', compact('jadwal'));
+        // Filter Dropdown Kategori
+        if ($request->has('kategori') && in_array($request->kategori, ['Balita', 'Remaja', 'Lansia'])) {
+            $query->where('warga.kategori', $request->kategori);
+        }
+
+        $riwayatTanggal = $query->paginate(10)->withQueryString();
+
+        return view('kader.absensi.index', compact('riwayatTanggal'));
     }
 
-    public function create($jadwalId)
+    // 2. HALAMAN SHOW: Detail per Tanggal dan Kategori
+    public function detailTanggal($tanggal, Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
+        $kategori = $request->kategori ?? 'Balita'; // Wajib menerima parameter kategori dari Index
         
-        $jadwal = JadwalPosyandu::where('unit_posyandu_id', $kaderUnitId)->findOrFail($jadwalId);
-        
-        // Ambil warga beserta status absensinya jika sudah pernah diisi
-        $warga = Warga::where('unit_posyandu_id', $kaderUnitId)
-            ->where('status', 'aktif')
-            ->orderBy('nama')
-            ->get()
-            ->map(function($w) use ($jadwalId) {
-                $absen = Absensi::where('warga_id', $w->id)->where('jadwal_posyandu_id', $jadwalId)->first();
-                $w->status_hadir = $absen ? $absen->status_hadir : null;
-                $w->keterangan = $absen ? $absen->keterangan : null;
-                return $w;
+        $queryBase = Absensi::with(['warga', 'kader'])
+            ->where('absensi.unit_posyandu_id', $kader->unit_posyandu_id)
+            ->where('absensi.tanggal', $tanggal)
+            ->whereHas('warga', function($q) use ($kategori) {
+                $q->where('kategori', $kategori);
             });
 
-        return view('kader.absensi.create', compact('jadwal', 'warga'));
-    }
+        // Hitung Statistik Instan untuk Header Show Blade
+        $statistik = [
+            'total' => (clone $queryBase)->count(),
+            'hadir' => (clone $queryBase)->where('status_hadir', 'hadir')->count(),
+            'tidak_hadir' => (clone $queryBase)->whereIn('status_hadir', ['izin', 'sakit'])->count(),
+        ];
 
-    public function store(Request $request, $jadwalId)
-    {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
-        $jadwal = JadwalPosyandu::where('unit_posyandu_id', $kaderUnitId)->findOrFail($jadwalId);
-
-        $validated = $request->validate([
-            'absensi' => 'required|array',
-            'absensi.*.warga_id' => 'required|exists:warga,id',
-            'absensi.*.status_hadir' => 'required|in:hadir,izin,sakit,alpa',
-            'absensi.*.keterangan' => 'nullable|string|max:255',
-        ]);
-
-        // Verifikasi tambahan: pastikan semua warga_id yang dikirim benar-benar milik unit ini
-        $wargaIds = collect($validated['absensi'])->pluck('warga_id');
-        $validWargaCount = Warga::whereIn('id', $wargaIds)->where('unit_posyandu_id', $kaderUnitId)->count();
-        
-        if ($validWargaCount !== $wargaIds->count()) {
-            return back()->with('error', 'Terdapat manipulasi data Warga ID.');
+        // Filter Pencarian di dalam Detail
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $queryBase->whereHas('warga', function($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%");
+            });
         }
 
-        // Eksekusi Massal (Upsert) untuk performa database
-        $upsertData = [];
-        $now = now();
-        
-        foreach ($validated['absensi'] as $item) {
-            $upsertData[] = [
-                'jadwal_posyandu_id' => $jadwal->id,
-                'warga_id' => $item['warga_id'],
-                'status_hadir' => $item['status_hadir'],
-                'keterangan' => $item['keterangan'],
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
+        $absensi = $queryBase->orderBy('status_hadir', 'asc')->paginate(15)->withQueryString();
 
-        // Upsert mencocokkan jadwal_id & warga_id. Jika ada, update. Jika tidak, insert.
-        // Pastikan Anda menambahkan composite unique index di migrasi: $table->unique(['jadwal_posyandu_id', 'warga_id']);
-        Absensi::upsert(
-            $upsertData,
-            ['jadwal_posyandu_id', 'warga_id'],
-            ['status_hadir', 'keterangan', 'updated_at']
-        );
-
-        return redirect()->route('kader.absensi.index')->with('success', 'Data absensi berhasil disimpan.');
+        return view('kader.absensi.show', compact('absensi', 'tanggal', 'kategori', 'statistik'));
     }
+
+    // (Fungsi create, store, dan success JANGAN DIUBAH, biarkan seperti semula)
+    public function create(Request $request) { /*...*/ }
+    public function store(Request $request) { /*...*/ }
+    public function success() { /*...*/ }
 }

@@ -14,6 +14,7 @@ return new class extends Migration
             $table->foreignId('unit_posyandu_id')->constrained('unit_posyandu')->cascadeOnDelete();
             $table->date('tanggal');
             $table->enum('status_hadir', ['hadir', 'izin', 'sakit'])->default('hadir');
+            $table->string('keterangan')->nullable();
             $table->timestamps();
         });
     }

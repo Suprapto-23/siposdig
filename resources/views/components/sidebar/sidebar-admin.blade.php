@@ -72,8 +72,8 @@
         </a>
 
         <!-- Unit Posyandu -->
-        <a href="{{ route('admin.unit.index') }}" 
-           class="flex items-center rounded-2xl px-3.5 py-3 transition-all duration-200 {{ request()->routeIs('admin.unit.*') ? 'bg-blue-50 text-blue-700 font-bold border border-blue-100/50' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600 font-medium' }}"
+        <a href="{{ route('admin.unit-posyandu.index') }}" 
+   class="flex items-center rounded-2xl px-3.5 py-3 transition-all duration-200 {{ request()->routeIs('admin.unit-posyandu.*') ? 'bg-blue-50 text-blue-700 font-bold border border-blue-100/50' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600 font-medium' }}"
            :class="sidebarCollapsed ? 'justify-center' : 'justify-start'" title="Unit Posyandu">
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1v1H9V7zm5 0h1v1h-1V7zm-5 4h1v1H9v-1zm5 0h1v1h-1v-1zm-3-4h2a2 2 0 012 2v14H9V9a2 2 0 012-2z"/></svg>
             <div class="transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden" 

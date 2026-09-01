@@ -1,46 +1,51 @@
 @extends('layouts.app-admin')
-@section('title', isset($unitPosyandu) ? 'Edit Unit Posyandu' : 'Tambah Unit Posyandu')
+@section('title', 'Tambah Unit Posyandu - SIPOSDIG')
 
 @section('content')
-<div class="max-w-2xl mx-auto space-y-6 pb-8 animate-fade-in-up">
-    <div class="bg-white rounded-3xl border border-slate-200/60 p-8 shadow-[0_4px_24px_rgba(37,99,235,0.03)]">
-        <h1 class="font-display text-xl font-bold text-slate-900 mb-6">{{ isset($unitPosyandu) ? 'Edit Unit Posyandu' : 'Tambah Unit Posyandu Baru' }}</h1>
+<div class="max-w-2xl mx-auto space-y-6 pb-8">
+    <h1 class="font-display text-2xl font-extrabold text-slate-900">Tambah Unit Posyandu</h1>
 
-        <form action="{{ isset($unitPosyandu) ? route('admin.unit-posyandu.update', $unitPosyandu->id) : route('admin.unit-posyandu.store') }}" method="POST" class="space-y-4">
-            @csrf
-            @if(isset($unitPosyandu)) @method('PUT') @endif
+    <form method="POST" action="{{ route('admin.unit-posyandu.store') }}" class="bg-white p-6 rounded-3xl border border-slate-200/60 shadow-[0_4px_24px_rgba(37,99,235,0.03)] space-y-4">
+        @csrf
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Nama Posyandu</label>
-                <input type="text" name="nama_posyandu" value="{{ old('nama_posyandu', $unitPosyandu->nama_posyandu ?? '') }}" required class="w-full rounded-2xl border border-slate-200 bg-slate-50/50 py-3 px-4 text-xs focus:border-blue-500 focus:bg-white focus:outline-none">
-            </div>
+        <div>
+            <label class="text-xs font-bold text-slate-700">Nama Posyandu</label>
+            <input type="text" name="nama" value="{{ old('nama') }}" required class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">
+            @error('nama') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">RW</label>
-                    <input type="text" name="rw" value="{{ old('rw', $unitPosyandu->rw ?? '') }}" required class="w-full rounded-2xl border border-slate-200 bg-slate-50/50 py-3 px-4 text-xs focus:border-blue-500 focus:bg-white focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">RT (Opsional)</label>
-                    <input type="text" name="rt" value="{{ old('rt', $unitPosyandu->rt ?? '') }}" class="w-full rounded-2xl border border-slate-200 bg-slate-50/50 py-3 px-4 text-xs focus:border-blue-500 focus:bg-white focus:outline-none">
-                </div>
-            </div>
+        <div>
+            <label class="text-xs font-bold text-slate-700">Kode Posyandu (opsional)</label>
+            <input type="text" name="kode_posyandu" value="{{ old('kode_posyandu') }}" class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">
+        </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Alamat Lengkap</label>
-                <textarea name="alamat" rows="3" required class="w-full rounded-2xl border border-slate-200 bg-slate-50/50 py-3 px-4 text-xs focus:border-blue-500 focus:bg-white focus:outline-none">{{ old('alamat', $unitPosyandu->alamat ?? '') }}</textarea>
-            </div>
+        <div>
+            <label class="text-xs font-bold text-slate-700">Wilayah</label>
+            <input type="text" name="wilayah" value="{{ old('wilayah') }}" required placeholder="Contoh: RW 03" class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">
+            @error('wilayah') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Keterangan</label>
-                <textarea name="keterangan" rows="2" class="w-full rounded-2xl border border-slate-200 bg-slate-50/50 py-3 px-4 text-xs focus:border-blue-500 focus:bg-white focus:outline-none">{{ old('keterangan', $unitPosyandu->keterangan ?? '') }}</textarea>
-            </div>
+        <div>
+            <label class="text-xs font-bold text-slate-700">Alamat</label>
+            <textarea name="alamat" required class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">{{ old('alamat') }}</textarea>
+            @error('alamat') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
 
-            <div class="flex justify-end gap-3 pt-4">
-                <a href="{{ route('admin.unit-posyandu.index') }}" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50">Batal</a>
-                <button type="submit" class="rounded-2xl bg-blue-600 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-700">Simpan Data</button>
-            </div>
-        </form>
-    </div>
+        <div>
+            <label class="text-xs font-bold text-slate-700">Penanggung Jawab</label>
+            <input type="text" name="penanggung_jawab" value="{{ old('penanggung_jawab') }}" required class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">
+            @error('penanggung_jawab') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+
+        <div>
+            <label class="text-xs font-bold text-slate-700">No. Telepon (opsional)</label>
+            <input type="text" name="no_telepon" value="{{ old('no_telepon') }}" class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm">
+        </div>
+
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700">Simpan</button>
+            <a href="{{ route('admin.unit-posyandu.index') }}" class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Batal</a>
+        </div>
+    </form>
 </div>
 @endsection

@@ -6,97 +6,81 @@ use App\Http\Controllers\Controller;
 use App\Models\Warga;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 
 class WargaController extends Controller
 {
+    // 1. HALAMAN INDEX: Menampilkan Daftar Warga
     public function index(Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
         
-        $query = Warga::where('unit_posyandu_id', $kaderUnitId);
+        $query = Warga::where('unit_posyandu_id', $kader->unit_posyandu_id);
 
-        if ($request->filled('kategori')) {
-            $query->where('kategori', $request->kategori);
-        }
-        if ($request->filled('search')) {
-            $query->where(function($q) use ($request) {
-                $q->where('nama', 'like', '%' . $request->search . '%')
-                  ->orWhere('nik', 'like', '%' . $request->search . '%');
+        // Filter Pencarian
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%");
             });
         }
 
-        // Hitung umur secara dinamis via Accessor (sudah disiapkan di Model)
-        $warga = $query->latest()->paginate(15);
+        // Filter Kategori (Balita/Remaja/Lansia)
+        if ($request->has('kategori') && $request->kategori != '') {
+            $query->where('kategori', $request->kategori);
+        }
+
+        // Filter Status (aktif/pending/nonaktif)
+        if ($request->has('status') && $request->status != '') {
+            $query->where('status', $request->status);
+        }
+
+        $warga = $query->orderBy('nama_lengkap', 'asc')->paginate(12)->withQueryString();
 
         return view('kader.warga.index', compact('warga'));
     }
 
+    // 2. HALAMAN CREATE: Form Tambah Warga
+    public function create()
+    {
+        return view('kader.warga.create');
+    }
+
+    // 3. PROSES SIMPAN: Validasi Ekstra Ketat
     public function store(Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
 
         $validated = $request->validate([
-            'nik' => 'required|digits:16|unique:warga,nik',
-            'nama' => 'required|string|max:255',
+            'nama_lengkap'  => 'required|string|max:255',
+            'nik'           => 'required|string|size:16|unique:warga,nik', // Wajib 16 digit & Unik
             'tanggal_lahir' => 'required|date|before:today',
             'jenis_kelamin' => 'required|in:L,P',
-            'alamat' => 'required|string',
-            'no_hp' => 'nullable|string|max:15',
-            'kategori' => 'required|in:Balita,Remaja,Lansia',
+            'kategori'      => 'required|in:Balita,Remaja,Lansia',
+            'alamat'        => 'required|string|max:500',
+            'no_hp'         => 'nullable|string|max:20',
+            'status'        => 'required|in:aktif,pending,nonaktif'
+        ], [
+            'nik.unique' => 'NIK ini sudah terdaftar di dalam sistem SIPOSDIG.',
+            'nik.size'   => 'Format NIK tidak valid (Wajib 16 digit).',
         ]);
 
-        // Proteksi Lapis 2: Paksa unit ID milik Kader, abaikan input user
-        $validated['unit_posyandu_id'] = $kaderUnitId;
-        $validated['status'] = 'aktif'; 
-        $validated['wajib_ganti_password'] = true;
+        $validated['unit_posyandu_id'] = $kader->unit_posyandu_id;
         
-        $rawPassword = Str::random(8);
-        $validated['password'] = Hash::make($rawPassword);
+        // Setup Akun Login Warga (Opsional jika kedepannya Warga bisa login)
+        $validated['password'] = Hash::make($validated['nik']); // Default password = NIK
+        $validated['wajib_ganti_password'] = true;
 
         Warga::create($validated);
 
-        // Flash password sementara agar Kader bisa memberikannya ke Warga
         return redirect()->route('kader.warga.index')
-            ->with('success', 'Warga binaan berhasil didaftarkan.')
-            ->with('kredensial_warga', [
-                'nik' => $validated['nik'],
-                'password' => $rawPassword
-            ]);
+                         ->with('success', 'Data Warga Binaan berhasil ditambahkan.');
     }
-
-    public function update(Request $request, $id)
+public function show(Warga $warga)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
-        
-        // Proteksi: findOrFail berantai dengan kondisi unit
-        $warga = Warga::where('unit_posyandu_id', $kaderUnitId)->findOrFail($id);
-
-        $validated = $request->validate([
-            'nik' => ['required', 'digits:16', Rule::unique('warga')->ignore($warga->id)],
-            'nama' => 'required|string|max:255',
-            'tanggal_lahir' => 'required|date|before:today',
-            'jenis_kelamin' => 'required|in:L,P',
-            'alamat' => 'required|string',
-            'no_hp' => 'nullable|string|max:15',
-            'kategori' => 'required|in:Balita,Remaja,Lansia',
-            'status' => 'required|in:aktif,nonaktif',
-        ]);
-
-        $warga->update($validated);
-
-        return redirect()->route('kader.warga.index')->with('success', 'Data warga berhasil diperbarui.');
-    }
-
-    public function show($id)
-    {
-        $warga = Warga::with(['pengukuran' => function($q) {
-            $q->latest('tanggal_ukur')->take(12); // Ambil 12 riwayat terakhir untuk grafik
-        }, 'unit'])
-        ->where('unit_posyandu_id', auth('kader')->user()->unit_posyandu_id)
-        ->findOrFail($id);
-
+        // Menampilkan halaman detail spesifik untuk warga yang dipilih
         return view('kader.warga.show', compact('warga'));
     }
+    // Fitur Edit & Delete bisa Anda kembangkan selanjutnya menggunakan prinsip yang sama
 }

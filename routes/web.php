@@ -22,12 +22,12 @@ use App\Http\Controllers\Admin\LogAktivitasController;
 use App\Http\Controllers\Admin\PengaturanController;
 
 // Kader Controllers
-use App\Http\Controllers\Kader\DashboardController as KaderDashboard;
-use App\Http\Controllers\Kader\WargaController as KaderWarga;
-use App\Http\Controllers\Kader\PengukuranFisikController;
+use App\Http\Controllers\Kader\DashboardController as KaderDashboardController;
 use App\Http\Controllers\Kader\AbsensiController;
-use App\Http\Controllers\Kader\SaranController;
+use App\Http\Controllers\Kader\PengukuranFisikController;
+use App\Http\Controllers\Kader\WargaController as KaderWargaController;
 use App\Http\Controllers\Kader\LaporanController;
+use App\Http\Controllers\Kader\SaranController;
 
 // Warga Controllers
 use App\Http\Controllers\Warga\DashboardController as WargaDashboard;
@@ -41,19 +41,29 @@ use App\Http\Controllers\Warga\ProfilController as WargaProfil;
 | GUEST & AUTHENTICATION ROUTES
 |--------------------------------------------------------------------------
 */
+// 1. Splash Screen & Cek Sesi
 Route::get('/', function () {
-    return view('welcome');
+    if (auth('admin')->check()) return redirect()->route('admin.dashboard');
+    if (auth('kader')->check()) return redirect()->route('kader.dashboard');
+    if (auth('warga')->check()) return redirect()->route('warga.dashboard');
+    
+    return view('auth.splash');
 })->name('home');
 
+// 2. Rute Autentikasi (Hanya untuk yang belum login)
 Route::middleware('guest')->group(function () {
+    // Login
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->name('login.submit');
     
-    // Registrasi Warga Mandiri (Ubah name menjadi register.store)
+    // Register Warga
     Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [RegisterController::class, 'register'])->name('register.store');
     Route::get('/register/success', [RegisterController::class, 'success'])->name('register.success');
 });
+
+// 3. Logout Global (Hanya untuk yang sudah login)
+Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth:admin,kader,warga');
 
 // Logout Global
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth:admin,kader,warga');
@@ -74,8 +84,9 @@ Route::middleware(['auth:admin'])->prefix('admin')->name('admin.')->group(functi
     Route::post('/verifikasi/{warga}/tolak', [VerifikasiAkunController::class, 'tolak'])->name('verifikasi.tolak');
 
     // Modul Master Unit Posyandu
-    Route::resource('unit', UnitPosyanduController::class)->except(['create', 'show', 'edit']); // Pakai modal untuk create/edit
+    Route::resource('unit-posyandu', UnitPosyanduController::class)->except(['show']);// Pakai modal untuk create/edit
 
+    
     // Modul Pengelolaan Kader
     Route::resource('kader', AdminKader::class);
     Route::post('/kader/{kader}/reset-password', [AdminKader::class, 'resetPassword'])->name('kader.reset-password');
@@ -101,29 +112,24 @@ Route::middleware(['auth:admin'])->prefix('admin')->name('admin.')->group(functi
 | KADER ROUTES
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:kader'])->prefix('kader')->name('kader.')->group(function () {
+Route::middleware('auth:kader')->prefix('kader')->name('kader.')->group(function () {
     // Dashboard Kader
-    Route::get('/dashboard', [KaderDashboard::class, 'index'])->name('dashboard');
-
-    // Modul Absensi (Terikat Jadwal)
-    Route::get('/absensi', [AbsensiController::class, 'index'])->name('absensi.index');
-    Route::get('/absensi/{jadwalId}/isi', [AbsensiController::class, 'create'])->name('absensi.create');
-    Route::post('/absensi/{jadwalId}', [AbsensiController::class, 'store'])->name('absensi.store');
-
-    // Modul Warga Binaan (Hanya Warga di Unit Kader terkait)
-    Route::resource('warga', KaderWarga::class)->except(['destroy']);
-
-    // Modul Pengukuran Fisik Dinamis
+    Route::get('/dashboard', [KaderDashboardController::class, 'index'])->name('dashboard');
+    
+    // Fitur Operasional Kader (Resource Routes otomatis membuat .index, .create, .store, dll)
+    Route::get('/absensi/success', [App\Http\Controllers\Kader\AbsensiController::class, 'success'])->name('absensi.success');
+    Route::get('/absensi/detail/{tanggal}', [App\Http\Controllers\Kader\AbsensiController::class, 'detailTanggal'])->name('absensi.detail');
+    Route::resource('absensi', App\Http\Controllers\Kader\AbsensiController::class);
     Route::resource('pengukuran', PengukuranFisikController::class);
-
-    // Modul Saran/Catatan Kesehatan Khusus Warga
-    Route::post('/saran', [SaranController::class, 'store'])->name('saran.store');
-    Route::delete('/saran/{id}', [SaranController::class, 'destroy'])->name('saran.destroy');
-
-    // Modul Rekapitulasi Laporan (Eskpor PDF/Excel)
-    Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
-    Route::get('/laporan/cetak', [LaporanController::class, 'export'])->name('laporan.cetak');
-    Route::post('/laporan/import', [LaporanController::class, 'import'])->name('laporan.import'); // Jika ada migrasi Excel
+    Route::resource('warga', App\Http\Controllers\Kader\WargaController::class);
+    
+    // Fitur Pelaporan
+    Route::resource('laporan', LaporanController::class);
+    Route::resource('saran', SaranController::class);
+    Route::name('laporan.')->group(function () {
+    Route::get('/laporan', [App\Http\Controllers\Kader\LaporanController::class, 'index'])->name('index');
+    Route::get('/laporan/cetak', [App\Http\Controllers\Kader\LaporanController::class, 'export'])->name('cetak');
+});
 });
 
 

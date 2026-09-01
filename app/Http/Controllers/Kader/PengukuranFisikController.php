@@ -6,182 +6,203 @@ use App\Http\Controllers\Controller;
 use App\Models\PengukuranFisik;
 use App\Models\Warga;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class PengukuranFisikController extends Controller
 {
+    /**
+     * HALAMAN INDEX: Menampilkan daftar riwayat pengukuran.
+     */
     public function index(Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
         
-        $query = PengukuranFisik::with('warga')->whereHas('warga', function($q) use ($kaderUnitId) {
-            $q->where('unit_posyandu_id', $kaderUnitId);
-        });
+        $query = PengukuranFisik::with(['warga', 'kader'])
+            ->whereHas('warga', function($q) use ($kader) {
+                $q->where('unit_posyandu_id', $kader->unit_posyandu_id);
+            });
 
-        // Filter dinamis
-        if ($request->filled('kategori')) {
-            $query->whereHas('warga', function($q) use ($request) {
-                $q->where('kategori', $request->kategori);
+        // Pencarian Nama atau NIK
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->whereHas('warga', function($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%");
             });
         }
-        
-        if ($request->filled('bulan') && $request->filled('tahun')) {
-            $query->whereMonth('tanggal_ukur', $request->bulan)
-                  ->whereYear('tanggal_ukur', $request->tahun);
+
+        // Filter Dropdown Kategori
+        if ($request->has('kategori') && in_array($request->kategori, ['Balita', 'Remaja', 'Lansia'])) {
+            $query->where('kategori_saat_ukur', $request->kategori);
         }
 
-        $pengukuran = $query->latest('tanggal_ukur')->paginate(15);
+        $pengukuran = $query->orderBy('tanggal_ukur', 'desc')->paginate(10)->withQueryString();
 
         return view('kader.pengukuran.index', compact('pengukuran'));
     }
 
-    public function create()
+    /**
+     * HALAMAN CREATE: Form dinamis berdasarkan kategori.
+     */
+    public function create(Request $request)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
+        
+        // Default menampilkan form Balita jika tidak ada parameter GET
+        $kategoriAktif = $request->kategori ?? 'Balita';
+        
+        // Mengambil daftar warga spesifik untuk unit kader tersebut dan kategori yang dipilih
+        $warga = Warga::where('unit_posyandu_id', $kader->unit_posyandu_id)
+                      ->where('status', 'aktif')
+                      ->where('kategori', $kategoriAktif)
+                      ->orderBy('nama_lengkap', 'asc')
+                      ->get(['id', 'nama_lengkap', 'nik', 'kategori']);
 
-        // Ambil warga aktif yang BELUM diukur bulan ini untuk mempermudah kader (Dropdown pintar)
-        $bulanIni = Carbon::now()->format('m');
-        $tahunIni = Carbon::now()->format('Y');
-
-        $wargaBinaan = Warga::where('unit_posyandu_id', $kaderUnitId)
-            ->where('status', 'aktif')
-            ->whereDoesntHave('pengukuran', function($q) use ($bulanIni, $tahunIni) {
-                $q->whereMonth('tanggal_ukur', $bulanIni)
-                  ->whereYear('tanggal_ukur', $tahunIni);
-            })
-            ->select('id', 'nama', 'kategori', 'nik')
-            ->orderBy('nama')
-            ->get();
-
-        return view('kader.pengukuran.create', compact('wargaBinaan'));
+        return view('kader.pengukuran.create', compact('warga', 'kategoriAktif'));
     }
 
+    /**
+     * PROSES STORE: Validasi, Kalkulasi, dan Normalisasi Data.
+     */
     public function store(Request $request)
     {
-        $kaderId = auth('kader')->id();
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
 
-        // 1. Ambil & pastikan Warga ada di unit Kader ini
-        $warga = Warga::where('unit_posyandu_id', $kaderUnitId)->findOrFail($request->warga_id);
+        // 1. Validasi Input Lengkap
+        $validated = $request->validate([
+            'warga_id'           => 'required|exists:warga,id',
+            'tanggal_ukur'       => 'required|date',
+            'kategori_saat_ukur' => 'required|in:Balita,Remaja,Lansia',
+            'berat_badan'        => 'nullable|numeric|min:0',
+            'tinggi_badan'       => 'nullable|numeric|min:0',
+            'lingkar_kepala'     => 'nullable|numeric|min:0',
+            'lila'               => 'nullable|numeric|min:0',
+            'lingkar_perut'      => 'nullable|numeric|min:0',
+            'status_stunting'    => 'nullable|in:normal,pendek,sangat_pendek,tinggi',
+            'sistol'             => 'nullable|integer|min:0',
+            'diastol'            => 'nullable|integer|min:0',
+            'gula_darah'         => 'nullable|integer|min:0',
+            'kolesterol'         => 'nullable|integer|min:0',
+            'asam_urat'          => 'nullable|numeric|min:0',
+            'hemoglobin'         => 'nullable|numeric|min:0',
+            'status_kemandirian' => 'nullable|in:mandiri,bantuan_ringan,bantuan_penuh',
+            'catatan'            => 'nullable|string',
+        ]);
 
-        // 2. Proteksi Duplikasi: Cek apakah warga ini sudah diukur di bulan dan tahun yang sama
-        $tanggalInput = Carbon::parse($request->tanggal_ukur);
-        $cekDuplikat = PengukuranFisik::where('warga_id', $warga->id)
-            ->whereMonth('tanggal_ukur', $tanggalInput->format('m'))
-            ->whereYear('tanggal_ukur', $tanggalInput->format('Y'))
-            ->exists();
-
-        if ($cekDuplikat) {
-            return back()->withInput()->with('error', 'Warga ini sudah memiliki data pengukuran di bulan tersebut. Silakan edit data yang sudah ada.');
+        // 2. Keamanan Lapis Kedua (Anti-IDOR)
+        // Memastikan warga yang dikirim dari form benar-benar warga di Posyandu milik Kader
+        $warga = Warga::findOrFail($validated['warga_id']);
+        if ($warga->unit_posyandu_id != $kader->unit_posyandu_id) {
+            abort(403, 'Akses Ditolak. Warga tidak terdaftar di Unit Anda.');
         }
 
-        // 3. Validasi Dinamis berdasarkan Kategori Warga
-        $rules = [
-            'warga_id' => 'required|exists:warga,id',
-            'tanggal_ukur' => 'required|date|before_or_equal:today',
-            'berat_badan' => 'required|numeric|min:1|max:200',
-            'tinggi_badan' => 'required|numeric|min:10|max:250',
-        ];
+        $validated['kader_id'] = $kader->id;
 
-        if ($warga->kategori === 'Balita') {
-            $rules['lingkar_kepala'] = 'required|numeric|min:10|max:100';
-            $rules['lila'] = 'required|numeric|min:5|max:50'; // LILA balita
-        } elseif ($warga->kategori === 'Lansia') {
-            $rules['tekanan_darah_sistol'] = 'required|integer|min:50|max:250';
-            $rules['tekanan_darah_diastol'] = 'required|integer|min:30|max:150';
-            $rules['gula_darah'] = 'nullable|numeric|min:10|max:600';
-            $rules['kolesterol'] = 'nullable|numeric|min:50|max:500';
-        } elseif ($warga->kategori === 'Remaja') {
-            $rules['tekanan_darah_sistol'] = 'nullable|integer';
-            $rules['tekanan_darah_diastol'] = 'nullable|integer';
-        }
-
-        $validated = $request->validate($rules);
-        $validated['kader_id'] = $kaderId;
-
-        // 4. Kalkulasi Otomatis (Auto-IMT)
-        // IMT = Berat (kg) / (Tinggi (m) * Tinggi (m))
-        if (in_array($warga->kategori, ['Remaja', 'Lansia'])) {
-            $tinggiMeter = $validated['tinggi_badan'] / 100;
-            if ($tinggiMeter > 0) {
-                $validated['imt'] = round($validated['berat_badan'] / ($tinggiMeter * $tinggiMeter), 2);
+        // 3. Kalkulasi IMT Otomatis (Remaja & Lansia)
+        if (in_array($validated['kategori_saat_ukur'], ['Remaja', 'Lansia']) && !empty($validated['berat_badan']) && !empty($validated['tinggi_badan'])) {
+            $tb_meter = $validated['tinggi_badan'] / 100;
+            if ($tb_meter > 0) {
+                $validated['imt'] = round($validated['berat_badan'] / ($tb_meter * $tb_meter), 2);
             }
         }
 
-        DB::transaction(function () use ($validated) {
-            PengukuranFisik::create($validated);
-        });
+        // 4. Normalisasi Basis Data (Cleansing Data)
+        // Agar database bersih, kita paksa NULL kolom yang tidak sesuai dengan kategori
+        if ($validated['kategori_saat_ukur'] === 'Balita') {
+            $validated['sistol']             = null; 
+            $validated['diastol']            = null; 
+            $validated['imt']                = null;
+            $validated['lingkar_perut']      = null;
+            $validated['lila']               = null;
+            $validated['hemoglobin']         = null;
+            $validated['gula_darah']         = null; 
+            $validated['kolesterol']         = null; 
+            $validated['asam_urat']          = null;
+            $validated['status_kemandirian'] = null;
+        } elseif ($validated['kategori_saat_ukur'] === 'Remaja') {
+            $validated['lingkar_kepala']     = null; 
+            $validated['status_stunting']    = null;
+            $validated['gula_darah']         = null; 
+            $validated['kolesterol']         = null; 
+            $validated['asam_urat']          = null;
+            $validated['status_kemandirian'] = null;
+        } elseif ($validated['kategori_saat_ukur'] === 'Lansia') {
+            $validated['lingkar_kepala']     = null; 
+            $validated['status_stunting']    = null;
+        }
 
-        return redirect()->route('kader.pengukuran.index')->with('success', 'Data pengukuran fisik berhasil dicatat.');
+        // 5. Simpan Data
+        PengukuranFisik::create($validated);
+
+        return redirect()->route('kader.pengukuran.index')
+                         ->with('success', 'Data pengukuran fisik berhasil dicatat.');
     }
 
-    public function edit($id)
+    // 4. HALAMAN SHOW: Detail Profil Warga
+    public function show(Warga $warga)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
         
-        $pengukuran = PengukuranFisik::with('warga')
-            ->whereHas('warga', function($q) use ($kaderUnitId) {
-                $q->where('unit_posyandu_id', $kaderUnitId);
-            })
-            ->findOrFail($id);
-
-        return view('kader.pengukuran.edit', compact('pengukuran'));
-    }
-
-    public function update(Request $request, $id)
-    {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
-
-        $pengukuran = PengukuranFisik::with('warga')
-            ->whereHas('warga', function($q) use ($kaderUnitId) {
-                $q->where('unit_posyandu_id', $kaderUnitId);
-            })
-            ->findOrFail($id);
-
-        $warga = $pengukuran->warga;
-
-        $rules = [
-            'tanggal_ukur' => 'required|date|before_or_equal:today',
-            'berat_badan' => 'required|numeric|min:1|max:200',
-            'tinggi_badan' => 'required|numeric|min:10|max:250',
-        ];
-
-        if ($warga->kategori === 'Balita') {
-            $rules['lingkar_kepala'] = 'required|numeric';
-            $rules['lila'] = 'required|numeric';
-        } elseif ($warga->kategori === 'Lansia') {
-            $rules['tekanan_darah_sistol'] = 'required|integer';
-            $rules['tekanan_darah_diastol'] = 'required|integer';
-            $rules['gula_darah'] = 'nullable|numeric';
-            $rules['kolesterol'] = 'nullable|numeric';
+        // Anti-IDOR: Pastikan kader hanya melihat warga dari unitnya sendiri
+        if ($warga->unit_posyandu_id != $kader->unit_posyandu_id) {
+            abort(403, 'Akses Ditolak. Warga tidak terdaftar di Unit Posyandu Anda.');
         }
 
-        $validated = $request->validate($rules);
+        return view('kader.warga.show', compact('warga'));
+    }
 
-        // Recalculate IMT on update
-        if (in_array($warga->kategori, ['Remaja', 'Lansia'])) {
-            $tinggiMeter = $validated['tinggi_badan'] / 100;
-            if ($tinggiMeter > 0) {
-                $validated['imt'] = round($validated['berat_badan'] / ($tinggiMeter * $tinggiMeter), 2);
-            }
+    // 5. HALAMAN EDIT: Form Pembaruan Data
+    public function edit(Warga $warga)
+    {
+        $kader = auth('kader')->user();
+        
+        if ($warga->unit_posyandu_id != $kader->unit_posyandu_id) {
+            abort(403, 'Akses Ditolak.');
         }
 
-        $pengukuran->update($validated);
-
-        return redirect()->route('kader.pengukuran.index')->with('success', 'Data pengukuran fisik berhasil diperbarui.');
+        return view('kader.warga.edit', compact('warga'));
     }
 
-    public function destroy($id)
+    // 6. PROSES UPDATE: Validasi & Simpan Perubahan
+    public function update(Request $request, Warga $warga)
     {
-        $kaderUnitId = auth('kader')->user()->unit_posyandu_id;
+        $kader = auth('kader')->user();
 
-        $pengukuran = PengukuranFisik::whereHas('warga', function($q) use ($kaderUnitId) {
-            $q->where('unit_posyandu_id', $kaderUnitId);
-        })->findOrFail($id);
+        if ($warga->unit_posyandu_id != $kader->unit_posyandu_id) {
+            abort(403, 'Akses Ditolak.');
+        }
 
-        $pengukuran->delete();
+        $validated = $request->validate([
+            'nama_lengkap'  => 'required|string|max:255',
+            // Pengecualian validasi unique untuk NIK milik warga ini sendiri
+            'nik'           => 'required|string|size:16|unique:warga,nik,' . $warga->id,
+            'tanggal_lahir' => 'required|date|before:today',
+            'jenis_kelamin' => 'required|in:L,P',
+            'kategori'      => 'required|in:Balita,Remaja,Lansia',
+            'alamat'        => 'required|string|max:500',
+            'no_hp'         => 'nullable|string|max:20',
+            'status'        => 'required|in:aktif,pending,nonaktif'
+        ], [
+            'nik.unique' => 'NIK ini sudah terdaftar di sistem SIPOSDIG.',
+            'nik.size'   => 'Format NIK tidak valid (Wajib 16 digit).',
+        ]);
 
-        return back()->with('success', 'Data pengukuran fisik berhasil dihapus.');
+        $warga->update($validated);
+
+        return redirect()->route('kader.warga.index')
+                         ->with('success', 'Data Warga Binaan berhasil diperbarui.');
     }
+
+    // 7. PROSES HAPUS (Opsional/Sesuai Kebutuhan)
+    public function destroy(Warga $warga)
+    {
+        $kader = auth('kader')->user();
+        if ($warga->unit_posyandu_id != $kader->unit_posyandu_id) {
+            abort(403, 'Akses Ditolak.');
+        }
+
+        $warga->delete();
+        return redirect()->route('kader.warga.index')->with('success', 'Data warga berhasil dihapus.');
+    } 
+
+    
 }
