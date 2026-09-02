@@ -10,13 +10,13 @@ class VerifikasiAkunController extends Controller
 {
     public function index(Request $request)
     {
-        // Pastikan menarik dari Model Warga dengan status 'pending'
         $query = Warga::with('unitPosyandu')->where('status', 'pending');
 
         if ($request->has('search') && $request->search != '') {
-            $query->where(function($q) use ($request) {
-                $q->where('nama_lengkap', 'like', "%{$request->search}%")
-                  ->orWhere('nik', 'like', "%{$request->search}%");
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%");
             });
         }
 
@@ -25,16 +25,15 @@ class VerifikasiAkunController extends Controller
         return view('admin.verifikasi.index', compact('antrean'));
     }
 
-   public function setujui(Warga $warga)
-{
-    // Ubah status secara eksplisit menjadi 'aktif'
-    $warga->update(['status' => 'aktif']);
-    return redirect()->back()->with('success', 'Akun warga berhasil diverifikasi dan dipindahkan ke Kelola Warga.');
-}
+    public function setujui(Warga $warga)
+    {
+        $warga->update(['status' => 'aktif']);
+        return redirect()->back()->with('success', 'Akun warga berhasil diverifikasi dan dipindahkan ke Kelola Warga.');
+    }
 
-public function tolak(Warga $warga)
-{
-    $warga->update(['status' => 'nonaktif']);
-    return redirect()->back()->with('success', 'Pendaftaran warga ditolak.');
-}
+    public function tolak(Warga $warga)
+    {
+        $warga->update(['status' => 'nonaktif']);
+        return redirect()->back()->with('success', 'Pendaftaran warga ditolak.');
+    }
 }

@@ -3,36 +3,31 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Warga;
 use App\Models\Kader;
 use App\Models\UnitPosyandu;
-use App\Models\Warga;
-use Spatie\Activitylog\Models\Activity;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Gunakan single query aggregation di mana memungkinkan
-        $statistik = [
-            'total_unit' => UnitPosyandu::count(),
-            'kader_aktif' => Kader::where('status', 'aktif')->count(),
-            'warga_aktif' => Warga::where('status', 'aktif')->count(),
-            'antrean_verifikasi' => Warga::where('status', 'pending')->count(),
-        ];
+        // 1. Ambil Statistik Utama
+        $totalWarga = Warga::where('status', '!=', 'pending')->count();
+        $wargaPending = Warga::where('status', 'pending')->count();
+        $totalKader = Kader::count();
+        $totalPosyandu = UnitPosyandu::count();
 
-        // Breakdown Warga Aktif per Kategori
-        $wargaPerKategori = Warga::selectRaw('kategori, count(*) as total')
-            ->where('status', 'aktif')
-            ->groupBy('kategori')
-            ->pluck('total', 'kategori')
-            ->toArray();
+        // 2. Ambil 5 Pendaftar Warga Terbaru (Ini yang menyebabkan error "Undefined variable $warga")
+        $warga = Warga::with('unitPosyandu')->latest()->take(5)->get();
 
-        // 5 Aktivitas terakhir untuk audit ringan di dashboard
-        $aktivitasTerbaru = Activity::with(['causer', 'subject'])
-            ->latest()
-            ->take(5)
-            ->get();
-
-        return view('admin.dashboard', compact('statistik', 'wargaPerKategori', 'aktivitasTerbaru'));
+        // 3. Kirim semua variabel ke tampilan
+        return view('admin.dashboard', compact(
+            'totalWarga', 
+            'wargaPending', 
+            'totalKader', 
+            'totalPosyandu', 
+            'warga' // Variabel $warga kini tersedia untuk View!
+        ));
     }
 }

@@ -22,18 +22,17 @@ use App\Http\Controllers\Admin\LogAktivitasController;
 use App\Http\Controllers\Admin\PengaturanController;
 
 // Kader Controllers
-use App\Http\Controllers\Kader\DashboardController as KaderDashboardController;
-use App\Http\Controllers\Kader\AbsensiController;
-use App\Http\Controllers\Kader\PengukuranFisikController;
-use App\Http\Controllers\Kader\WargaController as KaderWargaController;
-use App\Http\Controllers\Kader\LaporanController;
+use App\Http\Controllers\Kader\DashboardController as KaderDashboard;
+use App\Http\Controllers\Kader\AbsensiController as KaderAbsensi;
+use App\Http\Controllers\Kader\PengukuranFisikController as KaderPengukuran;
+use App\Http\Controllers\Kader\WargaController as KaderWarga;
+use App\Http\Controllers\Kader\LaporanController as KaderLaporan;
 
 // Warga Controllers
 use App\Http\Controllers\Warga\DashboardController as WargaDashboard;
-use App\Http\Controllers\Warga\RiwayatPengukuranController;
+use App\Http\Controllers\Warga\RiwayatPengukuranController as WargaRiwayat;
 use App\Http\Controllers\Warga\EdukasiController as WargaEdukasi;
 use App\Http\Controllers\Warga\ProfilController as WargaProfil;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -60,7 +59,6 @@ Route::middleware('guest')->group(function () {
 // Logout Global
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth:admin,kader,warga');
 
-
 /*
 |--------------------------------------------------------------------------
 | ADMIN ROUTES
@@ -69,9 +67,11 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->midd
 Route::middleware(['auth:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminDashboard::class, 'index'])->name('dashboard');
     
-    Route::get('/verifikasi', [VerifikasiAkunController::class, 'index'])->name('verifikasi.index');
-    Route::post('/verifikasi/{warga}/setujui', [VerifikasiAkunController::class, 'setujui'])->name('verifikasi.setujui');
-    Route::post('/verifikasi/{warga}/tolak', [VerifikasiAkunController::class, 'tolak'])->name('verifikasi.tolak');
+    Route::prefix('verifikasi')->name('verifikasi.')->group(function () {
+        Route::get('/', [VerifikasiAkunController::class, 'index'])->name('index');
+        Route::post('/{warga}/setujui', [VerifikasiAkunController::class, 'setujui'])->name('setujui');
+        Route::post('/{warga}/tolak', [VerifikasiAkunController::class, 'tolak'])->name('tolak');
+    });
 
     Route::resource('unit-posyandu', UnitPosyanduController::class)->except(['show']);
     
@@ -82,11 +82,12 @@ Route::middleware(['auth:admin'])->prefix('admin')->name('admin.')->group(functi
     Route::post('/warga/{warga}/reset-password', [AdminWarga::class, 'resetPassword'])->name('warga.reset-password');
 
     Route::resource('edukasi', AdminEdukasi::class);
+    
     Route::get('/log-aktivitas', [LogAktivitasController::class, 'index'])->name('log-aktivitas.index');
+    
     Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan.index');
     Route::post('/pengaturan', [PengaturanController::class, 'update'])->name('pengaturan.update');
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -94,19 +95,24 @@ Route::middleware(['auth:admin'])->prefix('admin')->name('admin.')->group(functi
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:kader')->prefix('kader')->name('kader.')->group(function () {
-    Route::get('/dashboard', [KaderDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [KaderDashboard::class, 'index'])->name('dashboard');
     
-    Route::get('/absensi/success', [App\Http\Controllers\Kader\AbsensiController::class, 'success'])->name('absensi.success');
-    Route::get('/absensi/detail/{tanggal}', [App\Http\Controllers\Kader\AbsensiController::class, 'detailTanggal'])->name('absensi.detail');
-    Route::resource('absensi', App\Http\Controllers\Kader\AbsensiController::class);
-    Route::resource('pengukuran', PengukuranFisikController::class);
-    Route::resource('warga', AdminWarga::class);
+    Route::prefix('absensi')->name('absensi.')->group(function () {
+        Route::get('/success', [KaderAbsensi::class, 'success'])->name('success');
+        Route::get('/detail/{tanggal}', [KaderAbsensi::class, 'detailTanggal'])->name('detail');
+    });
+    Route::resource('absensi', KaderAbsensi::class);
     
-    // PERBAIKAN: Cukup gunakan 'laporan.index' karena sudah berada di dalam group name('kader.')
-    Route::get('/laporan', [App\Http\Controllers\Kader\LaporanController::class, 'index'])->name('laporan.index');
-    Route::get('/laporan/cetak', [App\Http\Controllers\Kader\LaporanController::class, 'export'])->name('laporan.cetak');
+    Route::resource('pengukuran', KaderPengukuran::class);
+    
+    // Memperbaiki pemanggilan Controller Warga untuk Kader
+    Route::resource('warga', KaderWarga::class);
+    
+    Route::prefix('laporan')->name('laporan.')->group(function () {
+        Route::get('/', [KaderLaporan::class, 'index'])->name('index');
+        Route::get('/cetak', [KaderLaporan::class, 'export'])->name('cetak');
+    });
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -115,12 +121,21 @@ Route::middleware('auth:kader')->prefix('kader')->name('kader.')->group(function
 */
 Route::middleware(['auth:warga'])->prefix('warga')->name('warga.')->group(function () {
     Route::get('/dashboard', [WargaDashboard::class, 'index'])->name('dashboard');
-    Route::get('/riwayat', [RiwayatPengukuranController::class, 'index'])->name('riwayat.index');
     
-    Route::get('/edukasi', [WargaEdukasi::class, 'index'])->name('edukasi.index');
-    Route::get('/edukasi/{slug}', [WargaEdukasi::class, 'show'])->name('edukasi.show');
+    Route::prefix('riwayat')->name('riwayat.')->group(function () {
+        Route::get('/', [WargaRiwayat::class, 'index'])->name('index');
+        // Opsi jika kedepannya ada detail riwayat per ID
+        Route::get('/{id}', [WargaRiwayat::class, 'show'])->name('show');
+    });
+    
+    Route::prefix('edukasi')->name('edukasi.')->group(function () {
+        Route::get('/', [WargaEdukasi::class, 'index'])->name('index');
+        Route::get('/{slug}', [WargaEdukasi::class, 'show'])->name('show');
+    });
 
-    Route::get('/profil', [WargaProfil::class, 'index'])->name('profil.index');
-    Route::put('/profil', [WargaProfil::class, 'updateProfil'])->name('profil.update');
-    Route::put('/profil/password', [WargaProfil::class, 'updatePassword'])->name('profil.password');
+    Route::prefix('profil')->name('profil.')->group(function () {
+        Route::get('/', [WargaProfil::class, 'index'])->name('index');
+        Route::put('/update', [WargaProfil::class, 'updateProfil'])->name('update');
+        Route::put('/password', [WargaProfil::class, 'updatePassword'])->name('password');
+    });
 });
