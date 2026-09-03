@@ -10,31 +10,31 @@ class EdukasiController extends Controller
 {
     public function index(Request $request)
     {
-        $wargaKategori = auth('warga')->user()->kategori;
+        $query = EdukasiKesehatan::latest();
 
-        $query = EdukasiKesehatan::with('pembuat:id,nama')
-            ->where('status', 'publish')
-            ->whereIn('target_kategori', [$wargaKategori, 'Semua']);
-
-        if ($request->filled('search')) {
-            $query->where('judul', 'like', '%' . $request->search . '%');
+        // Fitur Pencarian Artikel
+        if ($request->has('cari') && $request->cari != '') {
+            $query->where('judul', 'like', '%' . $request->cari . '%')
+                  ->orWhere('konten', 'like', '%' . $request->cari . '%');
         }
 
-        $edukasi = $query->latest()->paginate(9); // Grid 3x3
+        // Tampilkan 9 artikel per halaman
+        $edukasi = $query->paginate(9)->withQueryString();
 
         return view('warga.edukasi.index', compact('edukasi'));
     }
 
-    public function show($slug)
+    public function show($id)
     {
-        $wargaKategori = auth('warga')->user()->kategori;
+        // Cari artikel berdasarkan ID
+        $edukasi = EdukasiKesehatan::findOrFail($id);
 
-        $artikel = EdukasiKesehatan::with('pembuat:id,nama')
-            ->where('slug', $slug)
-            ->where('status', 'publish')
-            ->whereIn('target_kategori', [$wargaKategori, 'Semua'])
-            ->firstOrFail();
+        // Ambil 3 artikel terbaru lainnya untuk rekomendasi bacaan
+        $artikelLain = EdukasiKesehatan::where('id', '!=', $id)
+            ->latest()
+            ->take(3)
+            ->get();
 
-        return view('warga.edukasi.show', compact('artikel'));
+        return view('warga.edukasi.show', compact('edukasi', 'artikelLain'));
     }
 }

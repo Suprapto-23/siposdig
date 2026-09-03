@@ -5,24 +5,21 @@ namespace App\Http\Controllers\Warga;
 use App\Http\Controllers\Controller;
 use App\Models\PengukuranFisik;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class RiwayatPengukuranController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $wargaId = auth('warga')->id();
-        $kategori = auth('warga')->user()->kategori;
+        // Ambil data warga yang sedang login
+        $warga = Auth::guard('warga')->user();
 
-        $query = PengukuranFisik::with('kader:id,nama')
-            ->where('warga_id', $wargaId);
+        // Ambil riwayat pengukuran fisik khusus untuk warga ini
+        // Diurutkan dari tanggal terbaru, dibatasi 10 data per halaman
+        $riwayat = PengukuranFisik::where('warga_id', $warga->id)
+            ->orderBy('tanggal_ukur', 'desc')
+            ->paginate(10);
 
-        // Filter Tahun jika Warga ingin melihat histori tahun lalu
-        if ($request->filled('tahun')) {
-            $query->whereYear('tanggal_ukur', $request->tahun);
-        }
-
-        $riwayat = $query->latest('tanggal_ukur')->paginate(12); // Tampilkan per 12 bulan (1 tahun)
-
-        return view('warga.riwayat.index', compact('riwayat', 'kategori'));
+        return view('warga.riwayat.index', compact('warga', 'riwayat'));
     }
 }
